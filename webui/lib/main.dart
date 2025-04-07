@@ -81,7 +81,7 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, dynamic>> _messages = []; // {'role': 'user'|'bot', 'text': '...', 'time': '...', 'avatarUrl': '...'}
   final String _apiUrl = "https://api.groq.com/openai/v1/chat/completions";
-  final String _apiKey = "APIKEYHERE"; // Replace with your actual API key
+  final String _apiKey = "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"; // Replace with your actual API key
   bool _isLoading = false;
   List<Model> _models = [];
   bool _isLoadingModels = false;
