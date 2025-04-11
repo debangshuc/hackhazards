@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(const ChatBotApp());
@@ -73,6 +75,80 @@ String _formatTimestamp(String timestamp) {
   }
 }
 
+class ChatStorage {
+  static const String _chatFolder = 'chats';
+  static const String _currentChatFile = 'current_chat.json';
+
+  // Create chat storage directory
+  static Future<Directory> _getChatDirectory() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final chatDir = Directory('${appDir.path}/$_chatFolder');
+    
+    if (!await chatDir.exists()) {
+      await chatDir.create(recursive: true);
+    }
+    
+    return chatDir;
+  }
+
+  // Save chat messages
+  static Future<void> saveMessages(List<Map<String, dynamic>> messages) async {
+    try {
+      final chatDir = await _getChatDirectory();
+      final file = File('${chatDir.path}/$_currentChatFile');
+      
+      // Prepare data for saving
+      final data = {
+        'lastUpdated': DateTime.now().toIso8601String(),
+        'messages': messages,
+      };
+      
+      // Write to file
+      await file.writeAsString(jsonEncode(data));
+      print('Chat saved successfully to ${file.path}');
+    } catch (e) {
+      print('Error saving chat: $e');
+    }
+  }
+
+  // Load chat messages
+  static Future<List<Map<String, dynamic>>> loadMessages() async {
+    try {
+      final chatDir = await _getChatDirectory();
+      final file = File('${chatDir.path}/$_currentChatFile');
+      
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final data = jsonDecode(content);
+        final List<dynamic> messagesJson = data['messages'];
+        
+        // Convert to the correct type
+        return messagesJson.map((msg) => Map<String, dynamic>.from(msg)).toList();
+      }
+    } catch (e) {
+      print('Error loading chat: $e');
+    }
+    
+    // Return empty list if file doesn't exist or error occurs
+    return [];
+  }
+  
+  // Delete current chat
+  static Future<void> deleteCurrentChat() async {
+    try {
+      final chatDir = await _getChatDirectory();
+      final file = File('${chatDir.path}/$_currentChatFile');
+      
+      if (await file.exists()) {
+        await file.delete();
+        print('Chat deleted successfully');
+      }
+    } catch (e) {
+      print('Error deleting chat: $e');
+    }
+  }
+}
+
 class ChatPage extends StatefulWidget {
   @override
   _ChatPageState createState() => _ChatPageState();
@@ -82,40 +158,60 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
-  final List<Map<String, dynamic>> _messages =
-      []; // {'role': 'user'|'bot', 'text': '...', 'time': '...', 'avatarUrl': '...'}
+  final List<Map<String, dynamic>> _messages = []; // {'role': 'user'|'bot', 'text': '...', 'time': '...', 'avatarUrl': '...'}
   final String _apiUrl = "https://api.groq.com/openai/v1/chat/completions";
-  final String _apiKey =
-      "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"; // Replace with your actual API key
+  final String _apiKey = "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"; // Replace with your actual API key
   bool _isLoading = false;
   List<Model> _models = [];
   bool _isLoadingModels = false;
   String _selectedModelId = "llama-3.3-70b-versatile"; // Default model
+  bool _isInitialized = false;
 
   Model? get _selectedModel {
     return _models.firstWhere(
       (model) => model.id == _selectedModelId,
-      orElse:
-          () => Model(
-            id: _selectedModelId,
-            ownedBy: 'Unknown',
-            contextWindow: 0,
-            avatarUrl: 'https://via.placeholder.com/150/6a65b3',
-          ),
+      orElse: () => Model(
+        id: _selectedModelId,
+        ownedBy: 'Unknown',
+        contextWindow: 0,
+        avatarUrl: 'https://via.placeholder.com/150/6a65b3',
+      ),
     );
   }
 
- 
   @override
   void initState() {
     super.initState();
     _fetchModels(); // Fetch models when the app starts
+    _loadSavedChat(); // Load previous chat
     _textFieldFocusNode.addListener(_handleFocusChange);
     RawKeyboard.instance.addListener(_handleKeyEvent);
     _controller.addListener(() {
       setState(() {}); // Rebuild UI when text changes
     });
   }
+
+  Future<void> _loadSavedChat() async {
+    final savedMessages = await ChatStorage.loadMessages();
+    
+    if (savedMessages.isNotEmpty) {
+      setState(() {
+        _messages.clear();
+        _messages.addAll(savedMessages);
+        _isInitialized = true;
+      });
+      
+      // Scroll to bottom after loading messages
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+      });
+    } else {
+      setState(() {
+        _isInitialized = true;
+      });
+    }
+  }
+
   void _handleFocusChange() {
     if (!_textFieldFocusNode.hasFocus) {
       RawKeyboard.instance.removeListener(_handleKeyEvent);
@@ -136,7 +232,6 @@ class _ChatPageState extends State<ChatPage> {
       }
     }
   }
-
 
   Future<void> _fetchModels() async {
     setState(() {
@@ -175,6 +270,24 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<String> _fetchBotResponse(String userMessage) async {
     try {
+      // Convert previous messages to API format
+      List<Map<String, String>> apiMessages = [];
+      
+      // Add context from previous messages (converting _messages to API format)
+      for (var message in _messages) {
+        String role = message['role'] == 'user' ? 'user' : 'assistant';
+        apiMessages.add({
+          'role': role,
+          'content': message['text'],
+        });
+      }
+      
+      // Add current user message
+      apiMessages.add({
+        'role': 'user',
+        'content': userMessage,
+      });
+
       final response = await http.post(
         Uri.parse(_apiUrl),
         headers: {
@@ -183,9 +296,7 @@ class _ChatPageState extends State<ChatPage> {
         },
         body: jsonEncode({
           "model": _selectedModelId,
-          "messages": [
-            {"role": "user", "content": userMessage},
-          ],
+          "messages": apiMessages, // Send all messages as context
         }),
       );
 
@@ -203,6 +314,50 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) {
       return "Exception occurred: $e";
     }
+  }
+
+  void _resetChat() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Color(0xFF2E2E2E),
+        title: Text('Reset Chat', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Are you sure you want to clear the entire chat history?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          TextButton(
+            child: Text('Reset', style: TextStyle(color: Colors.red)),
+            onPressed: () async {
+              // Close the dialog
+              Navigator.of(context).pop();
+              
+              // Clear messages in memory
+              setState(() {
+                _messages.clear();
+              });
+              
+              // Delete the saved chat file
+              await ChatStorage.deleteCurrentChat();
+              
+              // Show confirmation
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Chat history has been reset'),
+                  backgroundColor: Colors.redAccent,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   void _showModelDropdown(BuildContext context) {
@@ -281,8 +436,18 @@ class _ChatPageState extends State<ChatPage> {
     _scrollController.dispose();
     _controller.dispose();
     _textFieldFocusNode.dispose();
-     RawKeyboard.instance.removeListener(_handleKeyEvent);
+    RawKeyboard.instance.removeListener(_handleKeyEvent);
     super.dispose();
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   void _sendMessage() async {
@@ -300,15 +465,9 @@ class _ChatPageState extends State<ChatPage> {
       _controller.clear();
       _isLoading = true;
     });
-    void _scrollToBottom() {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    }
+    
+    // Save messages after adding user message
+    await ChatStorage.saveMessages(_messages);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
@@ -322,12 +481,18 @@ class _ChatPageState extends State<ChatPage> {
       _messages.add({
         'role': 'bot',
         'text': botResponse,
-        'avatarUrl':
-            _selectedModel?.avatarUrl ??
-            'https://via.placeholder.com/150/6a65b3',
+        'avatarUrl': _selectedModel?.avatarUrl ?? 'https://via.placeholder.com/150/6a65b3',
         'time': botTimestamp,
       });
       _isLoading = false;
+    });
+    
+    // Save messages after adding bot response
+    await ChatStorage.saveMessages(_messages);
+    
+    // Scroll to show the latest message
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
     });
   }
 
@@ -339,23 +504,18 @@ class _ChatPageState extends State<ChatPage> {
       padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isUser) _buildAvatar(message['avatarUrl']),
           SizedBox(width: 8),
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color:
-                        isUser
-                            ? const Color(0xFF2E2E2E)
-                            : const Color(0xFF2E2E2E),
+                    color: isUser ? const Color(0xFF2E2E2E) : const Color(0xFF2E2E2E),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -394,8 +554,7 @@ class _ChatPageState extends State<ChatPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildAvatar(
-            _selectedModel?.avatarUrl ??
-                'https://via.placeholder.com/150/6a65b3',
+            _selectedModel?.avatarUrl ?? 'https://via.placeholder.com/150/6a65b3',
           ),
           SizedBox(width: 8),
           Column(
@@ -443,6 +602,18 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final inputAreaMaxHeight = screenHeight * 0.3;
+    
+    if (!_isInitialized) {
+      return Scaffold(
+        backgroundColor: Color(0xFF1A1A1A),
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
       backgroundColor: Color(0xFF1A1A1A),
       appBar: AppBar(
@@ -452,8 +623,7 @@ class _ChatPageState extends State<ChatPage> {
           children: [
             CircleAvatar(
               backgroundImage: NetworkImage(
-                _selectedModel?.avatarUrl ??
-                    'https://via.placeholder.com/150/6a65b3',
+                _selectedModel?.avatarUrl ?? 'https://via.placeholder.com/150/6a65b3',
               ),
               radius: 15,
             ),
@@ -473,12 +643,17 @@ class _ChatPageState extends State<ChatPage> {
                   strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
-              )
-            else
-              IconButton(
-                icon: Icon(Icons.arrow_drop_down, color: Colors.white),
-                onPressed: () => _showModelDropdown(context),
               ),
+            IconButton(
+              icon: Icon(Icons.arrow_drop_down, color: Colors.white),
+              onPressed: _isLoadingModels ? null : () => _showModelDropdown(context),
+            ),
+            // Reset button
+            IconButton(
+              icon: Icon(Icons.delete_outline, color: Colors.white70),
+              tooltip: 'Reset Chat',
+              onPressed: _resetChat,
+            ),
           ],
         ),
       ),
@@ -486,16 +661,23 @@ class _ChatPageState extends State<ChatPage> {
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              itemCount: _isLoading ? _messages.length + 1 : _messages.length,
-              itemBuilder: (context, index) {
-                if (_isLoading && index == _messages.length) {
-                  return _buildTypingIndicator();
-                }
-                return _buildMessage(_messages[index]);
-              },
-            ),
+            child: _messages.isEmpty 
+            ? Center(
+                child: Text(
+                  "Start a new conversation",
+                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                ),
+              )
+            : ListView.builder(
+                controller: _scrollController,
+                itemCount: _isLoading ? _messages.length + 1 : _messages.length,
+                itemBuilder: (context, index) {
+                  if (_isLoading && index == _messages.length) {
+                    return _buildTypingIndicator();
+                  }
+                  return _buildMessage(_messages[index]);
+                },
+              ),
           ),
           Container(
             constraints: BoxConstraints(maxHeight: inputAreaMaxHeight),
@@ -523,13 +705,9 @@ class _ChatPageState extends State<ChatPage> {
                                     child: Text(
                                       '${_controller.text.length}/500',
                                       style: TextStyle(
-                                        color:
-                                            _controller.text.length > 450
-                                                ? (_controller.text.length >=
-                                                        500
-                                                    ? Colors.red
-                                                    : Colors.amber)
-                                                : Colors.grey,
+                                        color: _controller.text.length > 450
+                                            ? (_controller.text.length >= 500 ? Colors.red : Colors.amber)
+                                            : Colors.grey,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -537,9 +715,7 @@ class _ChatPageState extends State<ChatPage> {
                                 ),
                               ConstrainedBox(
                                 constraints: BoxConstraints(
-                                  maxHeight:
-                                      inputAreaMaxHeight -
-                                      50, // Reserve space for counter
+                                  maxHeight: inputAreaMaxHeight - 50, // Reserve space for counter
                                 ),
                               ),
                               Padding(
@@ -574,33 +750,27 @@ class _ChatPageState extends State<ChatPage> {
                                       vertical: 8,
                                     ),
                                     child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.center,
                                       children: [
                                         Expanded(
                                           child: TextField(
                                             controller: _controller,
                                             focusNode: _textFieldFocusNode,
-                                            keyboardType:
-                                                TextInputType.multiline,
-                                            textInputAction:
-                                                TextInputAction.newline,
+                                            keyboardType: TextInputType.multiline,
+                                            textInputAction: TextInputAction.newline,
                                             style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 16,
                                             ),
-                                            maxLength:
-                                                500, // Set maximum character limit
-                                            maxLengthEnforcement:
-                                                MaxLengthEnforcement.enforced,
+                                            maxLength: 500, // Set maximum character limit
+                                            maxLengthEnforcement: MaxLengthEnforcement.enforced,
                                             // Remove counter since we have our own
-                                            buildCounter:
-                                                (
-                                                  context, {
-                                                  required currentLength,
-                                                  required isFocused,
-                                                  maxLength,
-                                                }) => null,
+                                            buildCounter: (
+                                              context, {
+                                              required currentLength,
+                                              required isFocused,
+                                              maxLength,
+                                            }) => null,
                                             // Allow text field to grow with content
                                             minLines: 1,
                                             maxLines: null,
@@ -612,14 +782,12 @@ class _ChatPageState extends State<ChatPage> {
 
                                               filled: true,
                                               fillColor: Colors.transparent,
-                                              contentPadding:
-                                                  EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 10,
-                                                  ),
+                                              contentPadding: EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 10,
+                                              ),
                                               border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(25),
+                                                borderRadius: BorderRadius.circular(25),
                                                 borderSide: BorderSide.none,
                                               ),
                                             ),
@@ -635,29 +803,13 @@ class _ChatPageState extends State<ChatPage> {
                                             icon: Icon(
                                               Icons.send_rounded,
                                               size: 24,
-                                              color:
-                                                  (_controller.text.isEmpty ||
-                                                          _controller
-                                                                  .text
-                                                                  .length >
-                                                              500)
-                                                      ? Colors.grey.withOpacity(
-                                                        0.5,
-                                                      ) // Disabled state
-                                                      : Colors.white
-                                                          .withOpacity(0.9),
+                                              color: (_controller.text.isEmpty || _controller.text.length > 500)
+                                                  ? Colors.grey.withOpacity(0.5) // Disabled state
+                                                  : Colors.white.withOpacity(0.9),
                                             ),
-                                            onPressed:
-                                                (_isLoading ||
-                                                        _controller
-                                                            .text
-                                                            .isEmpty ||
-                                                        _controller
-                                                                .text
-                                                                .length >
-                                                            500)
-                                                    ? null
-                                                    : _sendMessage,
+                                            onPressed: (_isLoading || _controller.text.isEmpty || _controller.text.length > 500)
+                                                ? null
+                                                : _sendMessage,
                                             padding: EdgeInsets.all(8),
                                           ),
                                         ),
