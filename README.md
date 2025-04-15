@@ -35,7 +35,7 @@ Create a production-ready chat interface that:
 ### Our Approach:  
 1. Chose Groq for its unparalleled speed advantage
 2. Addressed challenge of model switching UX
-3. Breakthrough: Implemented Shift+Enter for newlines
+3. Breakthrough: Compact UI for Seamless prompting
 4. Optimized for both desktop and mobile use
 
 ---
