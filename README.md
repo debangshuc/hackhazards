@@ -50,7 +50,7 @@ Create a production-ready chat interface that:
 
 ### Sponsor Technologies:
 - ✅ **Groq:** Powering all LLM interactions with <100ms response times
-- ✅ **Flutter:** Cross-platform interface with native performance
+
 
 ---
 
