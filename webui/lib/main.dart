@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   runApp(const ChatBotApp());
 }
@@ -160,7 +160,7 @@ class _ChatPageState extends State<ChatPage> {
   final FocusNode _textFieldFocusNode = FocusNode();
   final List<Map<String, dynamic>> _messages = []; // {'role': 'user'|'bot', 'text': '...', 'time': '...', 'avatarUrl': '...'}
   final String _apiUrl = "https://api.groq.com/openai/v1/chat/completions";
-  final String _apiKey = ""; // Replace with your actual API key
+  String _apiKey = ""; // Replace with your actual API key
   bool _isLoading = false;
   List<Model> _models = [];
   bool _isLoadingModels = false;
@@ -181,16 +181,139 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void initState() {
-    super.initState();
-    _fetchModels(); // Fetch models when the app starts
-    _loadSavedChat(); // Load previous chat
-    _textFieldFocusNode.addListener(_handleFocusChange);
-    RawKeyboard.instance.addListener(_handleKeyEvent);
-    _controller.addListener(() {
-      setState(() {}); // Rebuild UI when text changes
-    });
-  }
+  super.initState();
+  _loadApiKey(); // Load saved API key
+  _fetchModels(); // Fetch models when the app starts
+  _loadSavedChat(); // Load previous chat
+  _textFieldFocusNode.addListener(_handleFocusChange);
+  RawKeyboard.instance.addListener(_handleKeyEvent);
+  _controller.addListener(() {
+    setState(() {}); // Rebuild UI when text changes
+  });
+}
 
+
+  void _showSettingsDialog(BuildContext context) {
+  // Create a controller for the API key text field
+  final TextEditingController apiKeyController = TextEditingController(text: _apiKey);
+  bool obscureText = true; // State to toggle API key visibility
+
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: Color(0xFF2E2E2E),
+            title: Text('Settings', style: TextStyle(color: Colors.white)),
+            content: Container(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'API Key',
+                    style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  TextField(
+                    controller: apiKeyController,
+                    obscureText: obscureText,
+                    style: TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Enter your API key',
+                      hintStyle: TextStyle(color: Colors.grey),
+                      filled: true,
+                      fillColor: Color(0xFF3A3A3A),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscureText ? Icons.visibility : Icons.visibility_off,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            obscureText = !obscureText;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'Your API key is stored locally and used only for API requests.',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              TextButton(
+                child: Text('Save', style: TextStyle(color: Colors.blue)),
+                onPressed: () {
+                  // Update the API key
+                  setState(() {
+                    _apiKey = apiKeyController.text.trim();
+                  });
+                  
+                  // Save API key to persistent storage
+                  _saveApiKey(_apiKey);
+                  
+                  // Show confirmation
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('API key updated'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                  
+                  // Close dialog
+                  Navigator.of(context).pop();
+                  
+                  // Refresh models with new API key
+                  _fetchModels();
+                },
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+  Future<void> _saveApiKey(String apiKey) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('api_key', apiKey);
+    print('API key saved successfully');
+  } catch (e) {
+    print('Error saving API key: $e');
+  }
+}
+
+  Future<void> _loadApiKey() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final savedApiKey = prefs.getString('api_key') ?? "";
+    setState(() {
+      _apiKey = savedApiKey;
+    });
+    print('API key loaded successfully');
+  } catch (e) {
+    print('Error loading API key: $e');
+  }
+}
   Future<void> _loadSavedChat() async {
     final savedMessages = await ChatStorage.loadMessages();
     
@@ -617,46 +740,52 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       backgroundColor: Color(0xFF1A1A1A),
       appBar: AppBar(
-        backgroundColor: Color(0xFF2E2E2E),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              backgroundImage: NetworkImage(
-                _selectedModel?.avatarUrl ?? 'https://via.placeholder.com/150/6a65b3',
+      backgroundColor: Color(0xFF2E2E2E),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            backgroundImage: NetworkImage(
+              _selectedModel?.avatarUrl ?? 'https://via.placeholder.com/150/6a65b3',
+            ),
+            radius: 15,
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _selectedModel?.displayName ?? 'Model',
+              style: TextStyle(color: Colors.white),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (_isLoadingModels)
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
               ),
-              radius: 15,
             ),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _selectedModel?.displayName ?? 'Model',
-                style: TextStyle(color: Colors.white),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (_isLoadingModels)
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-            IconButton(
-              icon: Icon(Icons.arrow_drop_down, color: Colors.white),
-              onPressed: _isLoadingModels ? null : () => _showModelDropdown(context),
-            ),
-            // Reset button
-            IconButton(
-              icon: Icon(Icons.delete_outline, color: Colors.white70),
-              tooltip: 'Reset Chat',
-              onPressed: _resetChat,
-            ),
-          ],
-        ),
+          IconButton(
+            icon: Icon(Icons.arrow_drop_down, color: Colors.white),
+            onPressed: _isLoadingModels ? null : () => _showModelDropdown(context),
+          ),
+          // Settings button
+          IconButton(
+            icon: Icon(Icons.settings, color: Colors.white70),
+            tooltip: 'Settings',
+            onPressed: () => _showSettingsDialog(context),
+          ),
+          // Reset button
+          IconButton(
+            icon: Icon(Icons.delete_outline, color: Colors.white70),
+            tooltip: 'Reset Chat',
+            onPressed: _resetChat,
+          ),
+        ],
       ),
+    ),
 
       body: Column(
         children: [
