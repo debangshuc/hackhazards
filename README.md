@@ -57,7 +57,6 @@ powered by Groq's LPU technology.
 
 - ⚡ **Instant Responses:** Groq-powered sub-second AI replies
 - 🎨 **Model Switching:** Visual distinction between LLMs
-- ⌨️ **Smart Input:** Enter-to-send, Shift+Enter for newlines
 - 📱 **Responsive Design:** Works on all screen sizes
 - 🕒 **Message History:** Timestamped conversation flow
 
