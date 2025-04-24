@@ -1,6 +1,6 @@
 ![chatbot-banner](https://github.com/user-attachments/assets/a1493b84-e4e2-456e-a791-ce35ee2bcf2f)
 
-# 🚀 Groq Chat Interface
+# 🚀 Cerebra
 
 > A lightning-fast AI chat interface powered by Groq's LPU technology
 
@@ -26,8 +26,10 @@ powered by Groq's LPU technology.
 `G4L`
 
 ### Team Members:  
-- [Your Name](https://github.com/) (Frontend/Flutter)  
-- [Teammate](https://linkedin.com/) (API Integration)  
+- [Debangshu Chakraborty](https://github.com/debangshuc) (Frontend/Flutter)  
+- [Snehargho Ghosh](https://github.com/snehargho) (Backend and API Integration)
+- [Shirsho Karmakar](https://github.com/Shirsho12) (UI/UX Designer)
+- [Shaqueef Alam](https://www.linkedin.com/in/shaqueef-alam-a73501332/) (Innovator)
 
 ### Our Approach:  
 1. Chose Groq for its unparalleled speed advantage
@@ -47,13 +49,9 @@ powered by Groq's LPU technology.
 
 ### Sponsor Technologies:
 - ✅ **Groq:** Powering all LLM interactions with <100ms response times
-
-
 ---
 
 ## ✨ Key Features
-
-![interface-demo](https://example.com/demo.gif)
 
 - ⚡ **Instant Responses:** Groq-powered sub-second AI replies
 - 🎨 **Model Switching:** Visual distinction between LLMs
