@@ -10,9 +10,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+
 void main() {
+  
   runApp(const ChatBotApp());
 }
+
+
+
 
 class ChatBotApp extends StatelessWidget {
   const ChatBotApp({super.key});
@@ -22,6 +27,7 @@ class ChatBotApp extends StatelessWidget {
       title: 'WebUI',
       debugShowCheckedModeBanner: false,
       home: ChatPage(),
+      
     );
   }
 }
@@ -58,6 +64,7 @@ class Model {
       avatarUrl: avatarUrl,
     );
   }
+  
 
   // Helper to get a display name from id
   String get displayName {
@@ -175,6 +182,10 @@ class ChatStorage {
 }
 
 class ChatPage extends StatefulWidget {
+  
+  
+
+  ChatPage({super.key});
   @override
   _ChatPageState createState() => _ChatPageState();
 }
@@ -185,6 +196,7 @@ class _ChatPageState extends State<ChatPage> {
   final FocusNode _textFieldFocusNode = FocusNode();
   final List<PlatformFile> _attachments = [];
   final FilePicker _filePicker = FilePicker.platform;
+  
   final List<Map<String, dynamic>> _messages =
       []; // {'role': 'user'|'bot', 'text': '...', 'time': '...', 'avatarUrl': '...'}
   final String _apiUrl = "https://api.groq.com/openai/v1/chat/completions";
@@ -207,6 +219,7 @@ class _ChatPageState extends State<ChatPage> {
           ),
     );
   }
+   
 
   @override
   void initState() {
@@ -214,7 +227,8 @@ class _ChatPageState extends State<ChatPage> {
     Permission.storage.status.then((status) {
       if (!status.isGranted) Permission.storage.request();
     });
-    _loadApiKey(); // Load saved API key
+    _loadApiKey();// Load saved API key
+    
     _fetchModels(); // Fetch models when the app starts
     _loadSavedChat(); // Load previous chat
     _textFieldFocusNode.addListener(_handleFocusChange);
@@ -223,6 +237,7 @@ class _ChatPageState extends State<ChatPage> {
       setState(() {}); // Rebuild UI when text changes
     });
   }
+
 
   Future<void> _pickFiles() async {
     try {
@@ -687,20 +702,20 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _getFileIcon(String? extension) {
-    final iconColor = Colors.white70;
+    
     final size = 16.0;
 
     switch (extension?.toLowerCase()) {
       case 'png':
       case 'jpg':
       case 'jpeg':
-        return Icon(Icons.image, color: iconColor, size: size);
+        return Icon(Icons.image, color: Colors.blue, size: size);
       case 'pdf':
-        return Icon(Icons.picture_as_pdf, color: iconColor, size: size);
+        return Icon(Icons.picture_as_pdf, color:Colors.red , size: size);
       case 'txt':
-        return Icon(Icons.text_snippet, color: iconColor, size: size);
+        return Icon(Icons.text_snippet, color: Colors.white, size: size);
       default:
-        return Icon(Icons.insert_drive_file, color: iconColor, size: size);
+        return Icon(Icons.insert_drive_file, color:Colors.red , size: size);
     }
   }
 
