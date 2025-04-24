@@ -15,12 +15,9 @@ Building intuitive interfaces for next-generation AI models powered by Groq
 
 ## 🎯 Objective
 
-Create a production-ready chat interface that:
-- Provides sub-second responses using Groq's API
-- Supports multiple LLM models with visual distinction
-- Offers enterprise-grade UX with message history and typing indicators
-- Serves developers, content creators, and AI enthusiasts
-
+Our project addresses the challenge of slow, fragmented, and impersonal 
+AI chat experiences by providing a lightning-fast, multimodal chat interface 
+powered by Groq's LPU technology.
 ---
 
 ## 🧠 Team & Approach
