@@ -11,12 +11,13 @@ import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 
-void main() {
+void main() async {
+  // Ensure Flutter binding is initialized before anything else
+  WidgetsFlutterBinding.ensureInitialized();
   
+  // Run app
   runApp(const ChatBotApp());
 }
-
-
 
 
 class ChatBotApp extends StatelessWidget {
@@ -27,7 +28,6 @@ class ChatBotApp extends StatelessWidget {
       title: 'WebUI',
       debugShowCheckedModeBanner: false,
       home: ChatPage(),
-      
     );
   }
 }
@@ -182,9 +182,6 @@ class ChatStorage {
 }
 
 class ChatPage extends StatefulWidget {
-  
-  
-
   ChatPage({super.key});
   @override
   _ChatPageState createState() => _ChatPageState();
@@ -224,13 +221,12 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
-    Permission.storage.status.then((status) {
-      if (!status.isGranted) Permission.storage.request();
-    });
-    _loadApiKey();// Load saved API key
+    // Load saved API key, models, and chat history
+    _loadApiKey();
+    _fetchModels();
+    _loadSavedChat();
     
-    _fetchModels(); // Fetch models when the app starts
-    _loadSavedChat(); // Load previous chat
+    // Set up listeners
     _textFieldFocusNode.addListener(_handleFocusChange);
     RawKeyboard.instance.addListener(_handleKeyEvent);
     _controller.addListener(() {
@@ -238,23 +234,13 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-
   Future<void> _pickFiles() async {
     try {
-      // Request storage permission
-      final status = await Permission.storage.request();
-      if (!status.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Storage permission is required')),
-        );
-        return;
-      }
-
-      final result = await _filePicker.pickFiles(
-        allowMultiple: true,
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'txt', 'doc', 'docx'],
-      );
+  final result = await _filePicker.pickFiles(
+    allowMultiple: true,
+    type: FileType.custom,
+    allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'txt', 'doc', 'docx'],
+  );
 
       if (result != null) {
         // Filter out files that are too large
