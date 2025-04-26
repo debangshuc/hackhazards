@@ -31,9 +31,9 @@ class _ChatPageState extends State<ChatPage> {
   bool _isLoading = false;
   List<Model> _models = [];
   bool _isLoadingModels = false;
-  String _selectedModelId = "llama-3.1-70b-instant"; // Default model
+  String _selectedModelId = "llama-3.3-70b-versatile"; // Default model
   bool _isInitialized = false;
-  bool _enableImageSupport = false;
+  bool _enableImageSupport = true; // Enable image support by default
 
   Model? get _selectedModel {
     try {
@@ -162,58 +162,107 @@ class _ChatPageState extends State<ChatPage> {
           builder: (context, setState) {
             return AlertDialog(
               title: Text('Settings'),
-              content: Container(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'API Key',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    TextField(
-                      controller: apiKeyController,
-                      obscureText: obscureText,
-                      decoration: InputDecoration(
-                        hintText: 'Enter your API key',
-                        filled: true,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscureText
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              obscureText = !obscureText;
-                            });
-                          },
+              content: SingleChildScrollView(
+                child: Container(
+                  width: double.maxFinite,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'API Key',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'Your API key is stored locally and used only for API requests.',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    SizedBox(height: 16),
-                    
-                    // Image support toggle
-                    SwitchListTile(
-                      title: Text('Enable Image Support'),
-                      subtitle: Text('Send images to vision-capable models'),
-                      value: _enableImageSupport,
-                      onChanged: (value) {
-                        setState(() {
-                          _enableImageSupport = value;
-                        });
-                      },
-                    ),
-                  ],
+                      SizedBox(height: 8),
+                      TextField(
+                        controller: apiKeyController,
+                        obscureText: obscureText,
+                        decoration: InputDecoration(
+                          hintText: 'Enter your API key',
+                          filled: true,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscureText
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                obscureText = !obscureText;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'Your API key is stored locally and used only for API requests.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      SizedBox(height: 16),
+                      
+                      Divider(),
+                      
+                      // Image support section
+                      Text(
+                        'Image Support',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      
+                      // Image support toggle
+                      SwitchListTile(
+                        title: Text('Enable Image Support'),
+                        subtitle: Text('Send images to vision-capable models'),
+                        value: _enableImageSupport,
+                        onChanged: (value) {
+                          setState(() {
+                            _enableImageSupport = value;
+                          });
+                        },
+                      ),
+                      
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          'When enabled, images you attach will be sent to the model if it supports vision capabilities.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      
+                      SizedBox(height: 8),
+                      
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          'Supported models include:',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          '• Llama 4 Scout (Groq)\n• Llama 4 Maverick (Groq)\n• GPT-4o (OpenAI)\n• Claude 3 Opus/Sonnet (Anthropic)',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      
+                      SizedBox(height: 8),
+                      
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Text(
+                          'Note: Image files are processed locally and sent directly to the API.',
+                          style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: <Widget>[

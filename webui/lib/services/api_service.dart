@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 import '../models/model.dart';
 import '../models/message.dart';
+import 'image_service.dart';
 
 class ApiService {
   static const String API_KEY_PREF = 'api_key';
@@ -41,6 +43,18 @@ class ApiService {
       // Default to Groq API
       return apiEndpoints['groq']!;
     }
+  }
+
+  // Check if the model has vision capabilities
+  static bool hasVisionCapabilities(String modelId) {
+    // Models with vision capabilities
+    return modelId.contains('llama-4-scout') || 
+           modelId.contains('llama-4-maverick') ||
+           modelId.contains('llama-3.3-70b-versatile') ||
+           modelId.contains('gpt-4-vision') ||
+           modelId.contains('gpt-4o') ||
+           modelId.contains('claude-3-opus') ||
+           modelId.contains('claude-3-sonnet');
   }
 
   // Get API headers based on model ID
@@ -98,8 +112,14 @@ class ApiService {
           provider: 'groq',
         ),
         Model(
-          id: 'llama-3.1-70b-instant',
+          id: 'llama-3.3-70b-versatile',
           ownedBy: 'Groq',
+          contextWindow: 128000,
+          provider: 'groq',
+        ),
+        Model(
+          id: 'meta-llama/llama-4-scout-17b-16e-instruct',
+          ownedBy: 'Meta/Groq',
           contextWindow: 128000,
           provider: 'groq',
         ),
@@ -136,18 +156,14 @@ class ApiService {
     try {
       final apiEndpoint = getApiEndpoint(modelId);
       final headers = await getHeaders(modelId);
+      final bool supportsVision = hasVisionCapabilities(modelId);
       
       if (modelId.contains('claude')) {
         // Anthropic API format
         final Map<String, dynamic> requestBody = {
           'model': modelId,
           'max_tokens': 1024,
-          'messages': messages.map((msg) => {
-            'role': msg.role == 'bot' ? 'assistant' : 'user',
-            'content': msg.role == 'user' && withImages && msg.attachments.isNotEmpty
-                ? _formatAnthropicContent(msg)
-                : msg.text,
-          }).toList(),
+          'messages': await _formatMessagesForAnthropicAPI(messages, withImages && supportsVision),
         };
 
         final response = await http.post(
@@ -166,12 +182,7 @@ class ApiService {
         // OpenAI-compatible API format (Groq, OpenAI, Grok)
         final Map<String, dynamic> requestBody = {
           'model': modelId,
-          'messages': messages.map((msg) => {
-            'role': msg.role == 'bot' ? 'assistant' : 'user',
-            'content': msg.role == 'user' && withImages && msg.attachments.isNotEmpty
-                ? _formatOpenAIContent(msg)
-                : msg.text,
-          }).toList(),
+          'messages': await _formatMessagesForOpenAIAPI(messages, withImages && supportsVision),
         };
 
         final response = await http.post(
@@ -196,69 +207,119 @@ class ApiService {
     }
   }
 
-  // Format content with images for OpenAI/Groq/Grok format
-  static List<dynamic> _formatOpenAIContent(ChatMessage message) {
-    List<dynamic> content = [];
-    
-    // Add text part
-    if (message.text.isNotEmpty) {
-      content.add({
-        'type': 'text',
-        'text': message.text,
-      });
-    }
-    
-    // Add image attachments
-    for (var attachment in message.attachments) {
-      if (attachment['extension']?.toLowerCase() == 'jpg' ||
-          attachment['extension']?.toLowerCase() == 'jpeg' ||
-          attachment['extension']?.toLowerCase() == 'png') {
+  // Format messages for OpenAI compatible API (Groq, OpenAI, Grok)
+  static Future<List<Map<String, dynamic>>> _formatMessagesForOpenAIAPI(
+    List<ChatMessage> messages, 
+    bool withImages
+  ) async {
+    List<Map<String, dynamic>> formattedMessages = [];
+
+    for (var message in messages) {
+      if (message.role == 'user' && withImages && message.attachments.isNotEmpty && message.attachments.any((a) => _isImageAttachment(a))) {
+        // Create a list to hold multiple content parts
+        List<Map<String, dynamic>> contentList = [];
         
-        // TODO: Implement base64 encoding of image data
-        // This is a placeholder - actual implementation would need to read file and convert to base64
-        content.add({
-          'type': 'image_url',
-          'image_url': {
-            'url': 'data:image/${attachment['extension']};base64,BASE64_ENCODED_DATA_HERE',
-          },
+        // Add text part if message has text
+        if (message.text.isNotEmpty) {
+          contentList.add({
+            'type': 'text',
+            'text': message.text,
+          });
+        }
+        
+        // Add image parts for each image attachment
+        for (var attachment in message.attachments) {
+          if (_isImageAttachment(attachment)) {
+            try {
+              final base64Image = await ImageService.fileToBase64(attachment['path']);
+              final extension = attachment['extension']?.toLowerCase() ?? 'jpeg';
+              
+              contentList.add({
+                'type': 'image_url',
+                'image_url': {
+                  'url': 'data:image/$extension;base64,$base64Image',
+                },
+              });
+            } catch (e) {
+              print('Error encoding image: $e');
+            }
+          }
+        }
+        
+        formattedMessages.add({
+          'role': message.role == 'bot' ? 'assistant' : 'user',
+          'content': contentList,
+        });
+      } else {
+        formattedMessages.add({
+          'role': message.role == 'bot' ? 'assistant' : 'user',
+          'content': message.text,
         });
       }
     }
     
-    return content;
+    return formattedMessages;
   }
   
-  // Format content with images for Anthropic format
-  static List<dynamic> _formatAnthropicContent(ChatMessage message) {
-    List<dynamic> content = [];
-    
-    // Add text part
-    if (message.text.isNotEmpty) {
-      content.add({
-        'type': 'text',
-        'text': message.text,
-      });
-    }
-    
-    // Add image attachments
-    for (var attachment in message.attachments) {
-      if (attachment['extension']?.toLowerCase() == 'jpg' ||
-          attachment['extension']?.toLowerCase() == 'jpeg' ||
-          attachment['extension']?.toLowerCase() == 'png') {
+  // Format messages for Anthropic API
+  static Future<List<Map<String, dynamic>>> _formatMessagesForAnthropicAPI(
+    List<ChatMessage> messages, 
+    bool withImages
+  ) async {
+    List<Map<String, dynamic>> formattedMessages = [];
+
+    for (var message in messages) {
+      if (message.role == 'user' && withImages && message.attachments.isNotEmpty && message.attachments.any((a) => _isImageAttachment(a))) {
+        // Create a list to hold multiple content parts
+        List<Map<String, dynamic>> contentList = [];
         
-        // TODO: Implement base64 encoding of image data
-        // This is a placeholder - actual implementation would need to read file and convert to base64
-        content.add({
-          'type': 'image',
-          'source': {
-            'type': 'base64',
-            'media_type': 'image/${attachment['extension']}',
-            'data': 'BASE64_ENCODED_DATA_HERE',
-          },
+        // Add text part if message has text
+        if (message.text.isNotEmpty) {
+          contentList.add({
+            'type': 'text',
+            'text': message.text,
+          });
+        }
+        
+        // Add image parts for each image attachment
+        for (var attachment in message.attachments) {
+          if (_isImageAttachment(attachment)) {
+            try {
+              final base64Image = await ImageService.fileToBase64(attachment['path']);
+              final mediaType = 'image/${attachment['extension']?.toLowerCase() ?? 'jpeg'}';
+              
+              contentList.add({
+                'type': 'image',
+                'source': {
+                  'type': 'base64',
+                  'media_type': mediaType,
+                  'data': base64Image,
+                },
+              });
+            } catch (e) {
+              print('Error encoding image: $e');
+            }
+          }
+        }
+        
+        formattedMessages.add({
+          'role': message.role == 'bot' ? 'assistant' : 'user',
+          'content': contentList,
+        });
+      } else {
+        formattedMessages.add({
+          'role': message.role == 'bot' ? 'assistant' : 'user',
+          'content': message.text,
         });
       }
     }
     
-    return content;
+    return formattedMessages;
+  }
+  
+  // Check if an attachment is an image
+  static bool _isImageAttachment(Map<String, dynamic> attachment) {
+    final extension = attachment['extension']?.toString().toLowerCase() ?? '';
+    return extension == 'jpg' || extension == 'jpeg' || extension == 'png';
   }
 } 

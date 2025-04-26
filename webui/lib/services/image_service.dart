@@ -8,15 +8,22 @@ class ImageService {
   // Convert file to base64
   static Future<String> fileToBase64(String filePath) async {
     try {
+      print('Attempting to convert file to base64: $filePath');
       File file = File(filePath);
       if (await file.exists()) {
+        print('File exists, reading as bytes...');
         Uint8List bytes = await file.readAsBytes();
+        print('Successfully read ${bytes.length} bytes from file');
         return base64Encode(bytes);
       } else {
-        throw Exception('File does not exist');
+        print('File does not exist: $filePath');
+        throw Exception('File does not exist: $filePath');
       }
     } catch (e) {
       print('Error converting file to base64: $e');
+      if (e is FileSystemException) {
+        print('FileSystemException details: ${e.message}, path: ${e.path}, osError: ${e.osError}');
+      }
       rethrow;
     }
   }
@@ -39,6 +46,46 @@ class ImageService {
         return 'text/plain';
       default:
         return 'application/octet-stream';
+    }
+  }
+  
+  // Check if file is an image
+  static bool isImageFile(String filePath) {
+    final extension = path.extension(filePath).toLowerCase();
+    return extension == '.jpg' || extension == '.jpeg' || extension == '.png' || extension == '.gif';
+  }
+  
+  // Get max image size (in bytes) for API request
+  static int getMaxImageSizeForProvider(String provider) {
+    switch (provider) {
+      case 'groq':
+        return 4 * 1024 * 1024; // 4MB for Groq
+      case 'openai':
+        return 20 * 1024 * 1024; // 20MB for OpenAI
+      case 'anthropic':
+        return 5 * 1024 * 1024; // 5MB for Anthropic
+      default:
+        return 4 * 1024 * 1024; // Default to 4MB
+    }
+  }
+  
+  // Compress image if needed to meet size requirements
+  static Future<File> compressImageIfNeeded(File imageFile, String provider) async {
+    try {
+      final stats = await imageFile.stat();
+      final maxSize = getMaxImageSizeForProvider(provider);
+      
+      if (stats.size <= maxSize) {
+        return imageFile; // No compression needed
+      }
+      
+      // TODO: Implement image compression
+      // For now, just return the original file with a warning
+      print('Warning: Image ${imageFile.path} exceeds size limit for $provider (${stats.size} > $maxSize bytes)');
+      return imageFile;
+    } catch (e) {
+      print('Error checking image size: $e');
+      return imageFile;
     }
   }
   
