@@ -85,3 +85,26 @@ powered by Groq's LPU technology.
 ```bash
 flutter pub get
 flutter run
+```
+
+## 🧬 Future Scope
+
+
+- 📈 Quality of Life Enhancements  
+- 🛡️ Building an Account System for Personalization 
+- 🌐 Definitive Conversation History  
+
+---
+
+## 📎 Resources / Credits
+
+- Groq API  
+- Flutter Documentation 
+
+---
+
+## 🏁 Final Words
+
+It was a fun and challenging experience for you team to participate in our First-Ever Hackathon!!
+We had no idea about how to build anything but learnt our way through to build something which is
+displayable to the public. We will continue learning and make something even better 💪!!
