@@ -62,8 +62,8 @@ powered by Groq's LPU technology.
 
 ## 📽️ Demo & Deliverables
 
-- **Live Demo:** [Available on GitHub Pages]()  
-- **Source Code:** [GitHub Repository]()  
+- **Live Demo:** [Youtube](https://www.youtube.com/watch?v=QOV30rKUG0g)  
+- **Source Code:** [GitHub Repository](https://github.com/debangshuc/hackhazards)  
 
 ---
 
